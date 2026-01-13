@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: order_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: order_db
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app123
+    ports:
+      - "3307:3306" # 避免和本地mysql端口冲突
+    command:
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
