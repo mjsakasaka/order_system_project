@@ -1,100 +1,68 @@
-from fastapi import FastAPI, Depends
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .config import settings
-from .db import Base, engine, get_db
-from . import crud
-from .schemas import ProductOut, OrderCreateIn, OrderOut, OrderListOut
+from .core.config import settings
+from .core.middleware import TraceIdMiddleware
+from .core.errors import AppError, ErrorCode
 
-app = FastAPI(title="Order Management System (MVP)")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_list(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def create_app() -> FastAPI:
+    app = FastAPI(title=settings.APP_NAME)
 
-# --- error handling ---
-@app.exception_handler(crud.BizError)
-def biz_error_handler(_, exc: crud.BizError):
-    return JSONResponse(
-        status_code=400,
-        content={"error": exc.code, "message": exc.message},
-    )
+    # Middleware：trace_id + request log
+    app.add_middleware(TraceIdMiddleware)
 
-@app.on_event("startup")
-def on_startup():
-    # MVP 直接用 create_all，后面你再换 Alembic
-    Base.metadata.create_all(bind=engine)
-    # seed
-    from .db import SessionLocal
-    db = SessionLocal()
-    try:
-        crud.seed_products(db)
-    finally:
-        db.close()
-
-@app.get("/health")
-def health():
-    return {"ok": True}
-
-@app.get("/products", response_model=list[ProductOut])
-def products(db: Session = Depends(get_db)):
-    return crud.list_products(db)
-
-@app.post("/orders", response_model=OrderOut)
-def create_order(payload: OrderCreateIn, db: Session = Depends(get_db)):
-    items = [(it.product_id, it.quantity) for it in payload.items]
-    order = crud.create_order(db, items)
-    return _to_order_out(order)
-
-@app.get("/orders", response_model=list[OrderListOut])
-def orders(status: str | None = None, db: Session = Depends(get_db)):
-    rows = crud.list_orders(db, status=status)
-    return [
-        OrderListOut(
-            id=o.id, status=o.status, total_amount=o.total_amount, created_at=o.created_at
+    # 业务异常统一返回（可断言 error_code）
+    @app.exception_handler(AppError)
+    async def app_error_handler(request: Request, exc: AppError):
+        trace_id = getattr(request.state, "trace_id", None)
+        return JSONResponse(
+            status_code=exc.http_status,
+            content={
+                "trace_id": trace_id,
+                "error_code": exc.error_code,
+                "message": exc.message,
+                "details": exc.details or {},
+            },
         )
-        for o in rows
-    ]
 
-@app.get("/orders/{order_id}", response_model=OrderOut)
-def order_detail(order_id: int, db: Session = Depends(get_db)):
-    order = crud.get_order(db, order_id)
-    return _to_order_out(order)
+    # FastAPI/Starlette 默认 HTTPException（也统一成我们的格式）
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        trace_id = getattr(request.state, "trace_id", None)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "trace_id": trace_id,
+                "error_code": ErrorCode.VALIDATION_ERROR
+                if 400 <= exc.status_code < 500
+                else ErrorCode.INTERNAL_ERROR,
+                "message": exc.detail,
+                "details": {},
+            },
+        )
 
-@app.post("/orders/{order_id}/pay", response_model=OrderOut)
-def pay(order_id: int, db: Session = Depends(get_db)):
-    order = crud.pay_order(db, order_id)
-    return _to_order_out(order)
+    # 未捕获异常：统一输出（避免前端/测试拿不到一致结构）
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        trace_id = getattr(request.state, "trace_id", None)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "trace_id": trace_id,
+                "error_code": ErrorCode.INTERNAL_ERROR,
+                "message": "Internal server error",
+                "details": {},
+            },
+        )
 
-@app.post("/orders/{order_id}/ship", response_model=OrderOut)
-def ship(order_id: int, db: Session = Depends(get_db)):
-    order = crud.ship_order(db, order_id)
-    return _to_order_out(order)
+    # Health check
+    @app.get("/health")
+    async def health():
+        return {"status": "ok", "env": settings.ENV}
 
-@app.post("/orders/{order_id}/cancel", response_model=OrderOut)
-def cancel(order_id: int, db: Session = Depends(get_db)):
-    order = crud.cancel_order(db, order_id)
-    return _to_order_out(order)
+    return app
 
-def _to_order_out(order):
-    return OrderOut(
-        id=order.id,
-        status=order.status,
-        total_amount=order.total_amount,
-        created_at=order.created_at,
-        items=[
-            {
-                "product_id": it.product_id,
-                "quantity": it.quantity,
-                "unit_price": it.unit_price,
-                "product_name": it.product.name if it.product else "",
-            }
-            for it in order.items
-        ],
-    )
+
+app = create_app()
