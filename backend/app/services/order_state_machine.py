@@ -114,3 +114,25 @@ def validate_transition(
 
     # 状态机校验
     return get_next_status(from_status, action)
+
+def parse_status(status_str: str) -> OrderStatus:
+    try:
+        return OrderStatus(status_str)
+    except ValueError:
+        raise AppError(
+            error_code=ErrorCode.ORDER_STATE_INVALID,
+            message=f"Unknown order status: {status_str}",
+            http_status=409,
+            details={"status": status_str},
+        )
+
+def parse_action(action_str: str) -> OrderAction:
+    try:
+        return OrderAction(action_str)
+    except ValueError:
+        raise AppError(
+            error_code=ErrorCode.ORDER_STATE_INVALID,
+            message=f"Unknown order action: {action_str}",
+            http_status=409,
+            details={"action": action_str},
+        )

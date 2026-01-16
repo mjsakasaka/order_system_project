@@ -6,6 +6,8 @@ from .core.config import settings
 from .core.middleware import TraceIdMiddleware
 from .core.errors import AppError, ErrorCode
 
+import app.models
+
 
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.APP_NAME)
@@ -61,6 +63,26 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health():
         return {"status": "ok", "env": settings.ENV}
+    
+
+
+    from .db.session import debug_db_info
+
+    @app.get("/debug/db")
+    async def debug_db():
+        return debug_db_info()
+    
+
+    from .db.session import engine
+    from .db.base import Base
+
+    @app.on_event("startup")
+    async def on_startup():
+        Base.metadata.create_all(bind=engine)
+
+    from .api.v1.router import router as v1_router
+    app.include_router(v1_router)
+
 
     return app
 
