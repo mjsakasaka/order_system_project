@@ -1,0 +1,82 @@
+################################
+# OS / Editor
+################################
+.DS_Store
+Thumbs.db
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+
+################################
+# Python
+################################
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python build
+build/
+dist/
+*.egg-info/
+
+
+################################
+# Environment / Secrets
+################################
+.env
+.env.*
+!.env.example
+
+# Local config overrides
+config.local.py
+
+
+################################
+# Logs
+################################
+*.log
+logs/
+
+
+################################
+# Database / Runtime artifacts
+################################
+*.sqlite3
+*.db
+
+
+################################
+# Coverage / Test reports
+################################
+.coverage
+htmlcov/
+coverage.xml
+test-results/
+
+
+################################
+# Frontend (Vite / React)
+################################
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+################################
+# Docker
+################################
+docker-data/
+docker/mysql/

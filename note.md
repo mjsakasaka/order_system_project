@@ -25,3 +25,16 @@ Adminer（看 DB）：浏览器打开 http://localhost:8080
 用户：oms
 密码：oms
 数据库：oms_dev / oms_test
+
+# 20260116
+```
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+
+$env:ENV="test"; uvicorn app.main:app --reload --port 8000
+
+$env:ENV="test"; python -m scripts.seed
+```
